@@ -4,7 +4,172 @@ import * as vscode from "vscode";
 export abstract class Item extends vscode.TreeItem {
 	abstract reference:
 		| admin.firestore.DocumentReference
-		| admin.firestore.CollectionReference;
+		| admin.firestore.CollectionReference
+		| string; // For KeyItem which doesn't have a Firestore reference
+}
+
+/**
+ * A Tree View item representing a key/field found in documents within a collection.
+ * Used in detailed view mode to show all available keys.
+ */
+export class KeyItem extends Item {
+	reference: string; // Store the collection path and key name
+
+	constructor(
+		public keyName: string,
+		public collectionPath: string,
+		public sampleValues: any[] = [],
+		public documentCount: number = 0,
+		public hasNestedObjects: boolean = false
+	) {
+		super(keyName, vscode.TreeItemCollapsibleState.None);
+
+		this.reference = `${collectionPath}/${keyName}`;
+		this.id = this.reference;
+		this.contextValue = "key";
+		this.tooltip = this.createTooltip();
+		this.iconPath = new vscode.ThemeIcon(
+			hasNestedObjects ? "symbol-object" : "key"
+		);
+
+		// Set collapsible state based on whether this key has nested objects
+		this.collapsibleState = hasNestedObjects
+			? vscode.TreeItemCollapsibleState.Collapsed
+			: vscode.TreeItemCollapsibleState.None;
+
+		// Show sample values in description
+		if (sampleValues.length > 0) {
+			const sampleText = sampleValues
+				.slice(0, 3)
+				.map((v) => {
+					if (typeof v === "string" && v.length > 20) {
+						return `"${v.substring(0, 17)}..."`;
+					}
+					return JSON.stringify(v);
+				})
+				.join(", ");
+			this.description = `(${documentCount} docs) ${sampleText}${
+				sampleValues.length > 3 ? "..." : ""
+			}`;
+		} else {
+			this.description = `(${documentCount} docs)`;
+		}
+	}
+
+	private createTooltip(): vscode.MarkdownString {
+		const tooltip = new vscode.MarkdownString();
+		tooltip.isTrusted = true;
+		tooltip.supportHtml = true;
+
+		tooltip.appendMarkdown(`**Key:** \`${this.keyName}\`\n\n`);
+		tooltip.appendMarkdown(
+			`**Collection:** \`${this.collectionPath}\`\n\n`
+		);
+		tooltip.appendMarkdown(
+			`**Found in:** ${this.documentCount} document(s)\n\n`
+		);
+
+		if (this.sampleValues.length > 0) {
+			tooltip.appendMarkdown("**Sample Values:**\n");
+			const displayValues = this.sampleValues.slice(0, 5);
+			displayValues.forEach((value, index) => {
+				tooltip.appendMarkdown(
+					`${index + 1}. \`${JSON.stringify(value)}\`\n`
+				);
+			});
+
+			if (this.sampleValues.length > 5) {
+				tooltip.appendMarkdown(
+					`\n...and ${this.sampleValues.length - 5} more values`
+				);
+			}
+		}
+
+		return tooltip;
+	}
+}
+
+/**
+ * A Tree View item representing a nested key/property within an object-type key.
+ * Used for drilling down into object structures in detailed view mode.
+ */
+export class NestedKeyItem extends Item {
+	reference: string; // Store the parent key path and nested key name
+
+	constructor(
+		public nestedKeyName: string,
+		public parentKeyPath: string,
+		public collectionPath: string,
+		public sampleValues: any[] = [],
+		public documentCount: number = 0,
+		public hasNestedObjects: boolean = false
+	) {
+		super(nestedKeyName, vscode.TreeItemCollapsibleState.None);
+
+		this.reference = `${parentKeyPath}.${nestedKeyName}`;
+		this.id = this.reference;
+		this.contextValue = "nested-key";
+		this.tooltip = this.createTooltip();
+		this.iconPath = new vscode.ThemeIcon(
+			hasNestedObjects ? "symbol-object" : "symbol-property"
+		);
+
+		// Set collapsible state based on whether this nested key has further nested objects
+		this.collapsibleState = hasNestedObjects
+			? vscode.TreeItemCollapsibleState.Collapsed
+			: vscode.TreeItemCollapsibleState.None;
+
+		// Show sample values in description
+		if (sampleValues.length > 0) {
+			const sampleText = sampleValues
+				.slice(0, 2)
+				.map((v) => {
+					if (typeof v === "string" && v.length > 15) {
+						return `"${v.substring(0, 12)}..."`;
+					}
+					return JSON.stringify(v);
+				})
+				.join(", ");
+			this.description = `(${documentCount} docs) ${sampleText}${
+				sampleValues.length > 2 ? "..." : ""
+			}`;
+		} else {
+			this.description = `(${documentCount} docs)`;
+		}
+	}
+
+	private createTooltip(): vscode.MarkdownString {
+		const tooltip = new vscode.MarkdownString();
+		tooltip.isTrusted = true;
+		tooltip.supportHtml = true;
+
+		tooltip.appendMarkdown(`**Nested Key:** \`${this.nestedKeyName}\`\n\n`);
+		tooltip.appendMarkdown(`**Parent Key:** \`${this.parentKeyPath}\`\n\n`);
+		tooltip.appendMarkdown(
+			`**Collection:** \`${this.collectionPath}\`\n\n`
+		);
+		tooltip.appendMarkdown(
+			`**Found in:** ${this.documentCount} document(s)\n\n`
+		);
+
+		if (this.sampleValues.length > 0) {
+			tooltip.appendMarkdown("**Sample Values:**\n");
+			const displayValues = this.sampleValues.slice(0, 5);
+			displayValues.forEach((value, index) => {
+				tooltip.appendMarkdown(
+					`${index + 1}. \`${JSON.stringify(value)}\`\n`
+				);
+			});
+
+			if (this.sampleValues.length > 5) {
+				tooltip.appendMarkdown(
+					`\n...and ${this.sampleValues.length - 5} more values`
+				);
+			}
+		}
+
+		return tooltip;
+	}
 }
 
 /**

@@ -2,7 +2,14 @@ import * as admin from "firebase-admin";
 import * as vscode from "vscode";
 
 import initializeFirestore from "../utilities/initializeFirestore";
-import { CollectionItem, DocumentItem, Item, ShowMoreItemsItem } from "./items";
+import {
+	CollectionItem,
+	DocumentItem,
+	Item,
+	ShowMoreItemsItem,
+	KeyItem,
+	NestedKeyItem,
+} from "./items";
 
 /**
  * Provides the Firestore Explorer Tree View data.
@@ -35,6 +42,11 @@ export default class ExplorerDataProvider
 			return this.getCollectionWithSize(element);
 		} else if (element instanceof DocumentItem) {
 			return this.getDocumentWithSize(element);
+		} else if (
+			element instanceof KeyItem ||
+			element instanceof NestedKeyItem
+		) {
+			return element; // KeyItem and NestedKeyItem don't need additional processing
 		} else {
 			return element;
 		}
@@ -57,8 +69,11 @@ export default class ExplorerDataProvider
 	}
 
 	async getChildren(
-		element?: DocumentItem | CollectionItem
+		element?: DocumentItem | CollectionItem | KeyItem | NestedKeyItem
 	): Promise<Item[] | undefined> {
+		const config = vscode.workspace.getConfiguration("firestore-explorer");
+		const viewMode = config.get("viewMode") as string;
+
 		const firestore = await initializeFirestore();
 		if (!element) {
 			const refs = await firestore.listCollections();
@@ -80,50 +95,312 @@ export default class ExplorerDataProvider
 						direction: this._orderBy[ref.path]?.direction ?? "asc",
 					})
 			);
+		} else if (element instanceof KeyItem) {
+			// Get nested keys for a specific key in the collection
+			return this.getNestedKeys(element);
+		} else if (element instanceof NestedKeyItem) {
+			// Get further nested keys for a nested property
+			return this.getNestedKeys(element);
 		} else if (element instanceof CollectionItem) {
-			const limit =
-				this._paging[element.reference.path] ??
+			// Check view mode to determine what to show
+			if (viewMode === "detailed") {
+				return this.getCollectionKeys(element);
+			} else {
+				return this.getCollectionDocuments(element);
+			}
+		}
+	}
+
+	/**
+	 * Gets documents in a collection (original Firebase structure mode behavior)
+	 */
+	private async getCollectionDocuments(
+		element: CollectionItem
+	): Promise<Item[]> {
+		const limit =
+			this._paging[element.reference.path] ??
+			vscode.workspace
+				.getConfiguration()
+				.get("firestore-explorer.pagingLimit");
+
+		console.log(
+			this._orderBy[element.reference.path]?.field ??
+				admin.firestore.FieldPath.documentId()
+		);
+		const snapshots = await element.reference
+			.limit(limit + 1)
+			.orderBy(
+				this._orderBy[element.reference.path]?.field ??
+					admin.firestore.FieldPath.documentId(),
+				this._orderBy[element.reference.path]?.direction ?? "asc"
+			)
+			.get();
+
+		const items: DocumentItem[] = [];
+
+		snapshots.forEach((snapshot) => {
+			const sampleData = this.getSampleData(snapshot.data());
+			items.push(
+				new DocumentItem(
+					snapshot.id,
+					snapshot.ref,
+					undefined,
+					sampleData
+				)
+			);
+		});
+
+		if (items.length > limit) {
+			items.pop();
+			return [...items, new ShowMoreItemsItem(element.reference, limit)];
+		} else {
+			return items;
+		}
+	}
+
+	/**
+	 * Gets all unique keys found in documents within a collection (detailed mode)
+	 */
+	private async getCollectionKeys(
+		element: CollectionItem
+	): Promise<KeyItem[]> {
+		try {
+			// Get a sample of documents to analyze their keys
+			const limit = Math.min(
+				100,
 				vscode.workspace
 					.getConfiguration()
-					.get("firestore-explorer.pagingLimit");
+					.get("firestore-explorer.pagingLimit", 10) * 5
+			); // Sample more docs for key analysis
 
-			console.log(
-				this._orderBy[element.reference.path]?.field ??
-					admin.firestore.FieldPath.documentId()
-			);
-			const snapshots = await element.reference
-				.limit(limit + 1)
-				.orderBy(
-					this._orderBy[element.reference.path]?.field ??
-						admin.firestore.FieldPath.documentId(),
-					this._orderBy[element.reference.path]?.direction ?? "asc"
-				)
-				.get();
+			const snapshots = await element.reference.limit(limit).get();
 
-			const items: DocumentItem[] = [];
+			// Map to store key information: key name -> { values: [], count: number }
+			const keyData = new Map<
+				string,
+				{ values: Set<any>; count: number }
+			>();
 
 			snapshots.forEach((snapshot) => {
-				const sampleData = this.getSampleData(snapshot.data());
-				items.push(
-					new DocumentItem(
-						snapshot.id,
-						snapshot.ref,
-						undefined,
-						sampleData
+				const data = snapshot.data();
+				if (data) {
+					Object.keys(data).forEach((key) => {
+						if (!keyData.has(key)) {
+							keyData.set(key, { values: new Set(), count: 0 });
+						}
+						const keyInfo = keyData.get(key)!;
+						keyInfo.count++;
+
+						// Add simplified value for display
+						const simplifiedValue = this.simplifyValue(
+							data[key],
+							30
+						);
+						keyInfo.values.add(JSON.stringify(simplifiedValue));
+					});
+				}
+			});
+
+			// Convert to KeyItem array
+			const keyItems: KeyItem[] = [];
+			keyData.forEach((info, keyName) => {
+				const sampleValues = Array.from(info.values)
+					.slice(0, 10)
+					.map((v) => {
+						try {
+							return JSON.parse(v);
+						} catch {
+							return v;
+						}
+					});
+
+				// Check if this key contains object values that can be expanded
+				const hasNestedObjects =
+					this.hasExpandableObjects(sampleValues);
+
+				keyItems.push(
+					new KeyItem(
+						keyName,
+						element.reference.path,
+						sampleValues,
+						info.count,
+						hasNestedObjects
 					)
 				);
 			});
 
-			if (items.length > limit) {
-				items.pop();
-				return [
-					...items,
-					new ShowMoreItemsItem(element.reference, limit),
-				];
+			// Sort keys alphabetically
+			keyItems.sort((a, b) => a.keyName.localeCompare(b.keyName));
+
+			return keyItems;
+		} catch (error) {
+			console.error("Failed to get collection keys:", error);
+			return [];
+		}
+	}
+
+	/**
+	 * Gets nested keys/properties for a KeyItem or NestedKeyItem that contains object values
+	 */
+	private async getNestedKeys(
+		element: KeyItem | NestedKeyItem
+	): Promise<NestedKeyItem[]> {
+		try {
+			let collectionPath: string;
+			let keyPath: string;
+
+			if (element instanceof KeyItem) {
+				collectionPath = element.collectionPath;
+				keyPath = element.keyName;
 			} else {
-				return items;
+				collectionPath = element.collectionPath;
+				keyPath = element.reference.replace(
+					`${element.collectionPath}/`,
+					""
+				);
+			}
+
+			const firestore = await initializeFirestore();
+			const collectionRef = firestore.collection(collectionPath);
+
+			// Get a sample of documents to analyze nested keys
+			const limit = Math.min(
+				50,
+				vscode.workspace
+					.getConfiguration()
+					.get("firestore-explorer.pagingLimit", 10) * 3
+			);
+
+			const snapshots = await collectionRef.limit(limit).get();
+
+			// Map to store nested key information
+			const nestedKeyData = new Map<
+				string,
+				{ values: Set<any>; count: number }
+			>();
+
+			snapshots.forEach((snapshot) => {
+				const data = snapshot.data();
+				if (data) {
+					// Navigate to the nested object using the key path
+					const value = this.getValueAtPath(data, keyPath);
+					if (
+						value &&
+						typeof value === "object" &&
+						!Array.isArray(value) &&
+						value !== null
+					) {
+						Object.keys(value).forEach((nestedKey) => {
+							if (!nestedKeyData.has(nestedKey)) {
+								nestedKeyData.set(nestedKey, {
+									values: new Set(),
+									count: 0,
+								});
+							}
+							const keyInfo = nestedKeyData.get(nestedKey)!;
+							keyInfo.count++;
+
+							// Add simplified value for display
+							const simplifiedValue = this.simplifyValue(
+								value[nestedKey],
+								20
+							);
+							keyInfo.values.add(JSON.stringify(simplifiedValue));
+						});
+					}
+				}
+			});
+
+			// Convert to NestedKeyItem array
+			const nestedKeyItems: NestedKeyItem[] = [];
+			nestedKeyData.forEach((info, nestedKeyName) => {
+				const sampleValues = Array.from(info.values)
+					.slice(0, 8)
+					.map((v) => {
+						try {
+							return JSON.parse(v);
+						} catch {
+							return v;
+						}
+					});
+
+				// Check if this nested key contains further nested objects
+				const hasNestedObjects =
+					this.hasExpandableObjects(sampleValues);
+
+				nestedKeyItems.push(
+					new NestedKeyItem(
+						nestedKeyName,
+						element instanceof KeyItem
+							? `${element.collectionPath}/${element.keyName}`
+							: element.reference,
+						collectionPath,
+						sampleValues,
+						info.count,
+						hasNestedObjects
+					)
+				);
+			});
+
+			// Sort nested keys alphabetically
+			nestedKeyItems.sort((a, b) =>
+				a.nestedKeyName.localeCompare(b.nestedKeyName)
+			);
+
+			return nestedKeyItems;
+		} catch (error) {
+			console.error("Failed to get nested keys:", error);
+			return [];
+		}
+	}
+
+	/**
+	 * Checks if the sample values contain objects that can be expanded further
+	 */
+	private hasExpandableObjects(sampleValues: any[]): boolean {
+		return sampleValues.some(
+			(value) =>
+				value &&
+				typeof value === "object" &&
+				!Array.isArray(value) &&
+				value !== null &&
+				!this.isFirestoreSpecialType(value) &&
+				Object.keys(value).length > 0
+		);
+	}
+
+	/**
+	 * Checks if a value is a Firestore special type (timestamp, reference, geopoint, etc.)
+	 */
+	private isFirestoreSpecialType(value: any): boolean {
+		if (!value || typeof value !== "object") {
+			return false;
+		}
+
+		// Check for simplified Firestore types
+		return (
+			value._timestamp !== undefined ||
+			value._reference !== undefined ||
+			value._geopoint !== undefined
+		);
+	}
+
+	/**
+	 * Gets a value from an object using a dot-notation path
+	 */
+	private getValueAtPath(obj: any, path: string): any {
+		const keys = path.split(".");
+		let current = obj;
+
+		for (const key of keys) {
+			if (current && typeof current === "object" && key in current) {
+				current = current[key];
+			} else {
+				return undefined;
 			}
 		}
+
+		return current;
 	}
 
 	/**

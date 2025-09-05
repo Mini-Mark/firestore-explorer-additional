@@ -20,14 +20,28 @@ After configuring the extension with your service account, open the Firestore Ex
 
 - navigate all the collections and documents of your project (items will be loaded only when needed and paged to minimize the number of API requests);
 
+- **switch between two view modes**:
+  - **Firebase Mode** (default): Traditional Firebase structure showing Collections → Documents → Sub-collections
+  - **Detailed Mode**: Shows all unique keys/fields found within each collection with sample values and occurrence counts
+
 - sort documents in a collection by a specified field and direction;
 
 - view and edit the content of any document as a simple JSON file, taking advantage of the full power of vscode editor. Just save the file it to immediately update the document in the database.
+
+### View Mode Toggle
+
+Use the tree icon (🌳) in the toolbar or the "Firestore Explorer: Toggle View Mode" command to switch between:
+- **Firebase Mode**: Navigate through collections and documents as you would in Firebase console
+- **Detailed Mode**: Analyze data structure by viewing all available keys/fields within collections
+
+See [VIEW_MODE_FEATURE.md](VIEW_MODE_FEATURE.md) for detailed documentation.
 
 ## Extension Settings
 
 - `serviceAccountKeyPath`: path to the service account JSON file
 - `projectId`: the project ID of your Firebase project
+- `viewMode`: display mode - `firebase` (default) shows Firebase structure, `detailed` shows all keys within collections
+- `pagingLimit`: number of documents to show for each collection (default: 10)
 
 ## Known Issues
 

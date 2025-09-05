@@ -1,34 +1,58 @@
 import * as vscode from "vscode";
 import ExplorerDataProvider from "../explorer/ExplorerDataProvider";
-import { Item } from "../explorer/items";
+import { Item, KeyItem, CollectionItem } from "../explorer/items";
 
+export default async function orderBy(
+	item: Item,
+	explorerDataProvider: ExplorerDataProvider
+) {
+	// Only allow ordering for collections, not for keys
+	if (item instanceof KeyItem) {
+		vscode.window.showWarningMessage(
+			"Ordering is not available for keys in detailed view mode."
+		);
+		return;
+	}
 
-export default async function orderBy(item: Item, explorerDataProvider: ExplorerDataProvider) {
-    const fieldString = await vscode.window.showInputBox({
-        prompt: "Field name to order by",
-        title: "Order by",
-        placeHolder: "Field path",
-    });
+	if (!(item instanceof CollectionItem)) {
+		vscode.window.showWarningMessage(
+			"Ordering is only available for collections."
+		);
+		return;
+	}
 
-    const field: string | undefined = (fieldString === undefined || fieldString === "") ? undefined : fieldString;
+	const fieldString = await vscode.window.showInputBox({
+		prompt: "Field name to order by",
+		title: "Order by",
+		placeHolder: "Field path",
+	});
 
-    if (field === undefined) {
-        return;
-    }
+	const field: string | undefined =
+		fieldString === undefined || fieldString === ""
+			? undefined
+			: fieldString;
 
-    const direction = (await vscode.window.showQuickPick(
-        [
-            { label: "Ascending", picked: true },
-            { label: "Descending" },
-        ],
-        {
-            placeHolder: "Direction",
-            title: "Order by",
-        }
-    ) as { label: string; picked: boolean }).label === 'Descending'
-        ? 'desc'
-        : 'asc';
+	if (field === undefined) {
+		return;
+	}
 
-    explorerDataProvider.orderBy(item.reference.path, field, direction);
-    explorerDataProvider.refresh();
+	const direction =
+		(
+			(await vscode.window.showQuickPick(
+				[{ label: "Ascending", picked: true }, { label: "Descending" }],
+				{
+					placeHolder: "Direction",
+					title: "Order by",
+				}
+			)) as { label: string; picked: boolean }
+		).label === "Descending"
+			? "desc"
+			: "asc";
+
+	explorerDataProvider.orderBy(
+		(item.reference as any).path,
+		field,
+		direction
+	);
+	explorerDataProvider.refresh();
 }

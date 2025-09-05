@@ -20,6 +20,7 @@
 		"onCommand:firestore-explorer.setServiceAccountKeyPath",
 		"onCommand:firestore-explorer.refreshExplorer",
 		"onCommand:firestore-explorer.showMoreItems",
+		"onCommand:firestore-explorer.toggleViewMode",
 		"onView:firestore-explorer-view"
 	],
 	"main": "./out/extension.js",
@@ -36,6 +37,15 @@
 					"type": "number",
 					"default": 10,
 					"description": "Number of documents to show for each collection"
+				},
+				"firestore-explorer.viewMode": {
+					"type": "string",
+					"enum": [
+						"firebase",
+						"detailed"
+					],
+					"default": "firebase",
+					"description": "Display mode: 'firebase' shows Firebase structure, 'detailed' shows all keys within collections"
 				}
 			}
 		},
@@ -84,6 +94,11 @@
 				"icon": "$(refresh)"
 			},
 			{
+				"command": "firestore-explorer.toggleViewMode",
+				"title": "Firestore Explorer: Toggle View Mode",
+				"icon": "$(list-tree)"
+			},
+			{
 				"command": "firestore-explorer.copyPath",
 				"title": "Copy Path"
 			},
@@ -103,6 +118,11 @@
 					"command": "firestore-explorer.refreshExplorer",
 					"when": "view == firestore-explorer-view",
 					"group": "navigation"
+				},
+				{
+					"command": "firestore-explorer.toggleViewMode",
+					"when": "view == firestore-explorer-view",
+					"group": "navigation"
 				}
 			],
 			"view/item/context": [
@@ -112,7 +132,7 @@
 				},
 				{
 					"command": "firestore-explorer.orderBy",
-					"when": "view == firestore-explorer-view"
+					"when": "view == firestore-explorer-view && viewItem == collection"
 				}
 			],
 			"commandPalette": [
