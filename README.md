@@ -24,6 +24,10 @@ After configuring the extension with your service account, open the Firestore Ex
   - **Firebase Mode** (default): Traditional Firebase structure showing Collections → Documents → Sub-collections
   - **Detailed Mode**: Shows all unique keys/fields found within each collection with sample values and occurrence counts
 
+- **enhanced copy path functionality**: 
+  - Firebase mode: copies Firestore paths (e.g., `users/user123/posts`)
+  - Detailed mode: copies JSON-style paths (e.g., `users[0].address.street`)
+
 - sort documents in a collection by a specified field and direction;
 
 - view and edit the content of any document as a simple JSON file, taking advantage of the full power of vscode editor. Just save the file it to immediately update the document in the database.

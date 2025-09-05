@@ -100,11 +100,40 @@ You can also set the default view mode in VS Code settings:
 - **Data Types**: Handles all Firestore data types including timestamps, references, and geopoints
 - **Context Menus**: Ordering is only available in Firebase mode for collections
 
+## Enhanced Copy Path Feature
+
+The copy path functionality adapts to the current view mode to provide the most useful path format:
+
+### Firebase Mode Path Format
+- **Collections**: `workspace/collection_name`
+- **Documents**: `workspace/collection_name/document_id`
+- **Subcollections**: `workspace/collection_name/document_id/subcollection_name`
+- **Example**: `users/user123/posts/post456`
+
+### Detailed Mode Path Format (JSON-style)
+- **Collection Keys**: `collectionName[0].keyName`
+- **Nested Properties**: `collectionName[0].keyName.nestedProperty`
+- **Deep Nesting**: `collectionName[0].address.coordinates.latitude`
+- **Examples**: 
+  - `users[0].name`
+  - `users[0].address.street`
+  - `products[0].variants.color.options`
+
+### Usage
+1. Right-click on any item in the tree view
+2. Select "Copy Path" from the context menu
+3. The appropriate path format is automatically copied to your clipboard
+4. A notification shows the copied path for confirmation
+
+This feature is particularly useful for:
+- **Firebase Mode**: Getting exact Firestore collection/document paths for API calls
+- **Detailed Mode**: Getting JSON property paths for data analysis, queries, or documentation
+
 ## Notes
 
 - The view mode setting is persistent and will be remembered between VS Code sessions
 - Switching modes refreshes the tree view automatically
-- In detailed mode, you can still copy key paths using the context menu
+- **Smart Copy Path**: Automatically uses the appropriate path format based on current view mode
 - **Deep Drilling**: Click expand arrows (▶) on object keys to explore nested properties
 - **Unlimited Depth**: You can drill down through multiple levels of nested objects
 - **Smart Icons**: Visual indicators help distinguish between simple values and expandable objects
