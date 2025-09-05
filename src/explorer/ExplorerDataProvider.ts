@@ -29,6 +29,22 @@ export default class ExplorerDataProvider
 			direction: "asc" | "desc";
 		};
 	} = {};
+	private _pinnedItems: Set<string> = new Set();
+
+	constructor() {
+		this.loadPinnedItems();
+	}
+
+	private loadPinnedItems(): void {
+		const config = vscode.workspace.getConfiguration("firestore-explorer");
+		const pinnedItems = config.get("pinnedItems") as string[] || [];
+		this._pinnedItems = new Set(pinnedItems);
+	}
+
+	private async savePinnedItems(): Promise<void> {
+		const config = vscode.workspace.getConfiguration("firestore-explorer");
+		await config.update("pinnedItems", Array.from(this._pinnedItems), vscode.ConfigurationTarget.Workspace);
+	}
 
 	readonly onDidChangeTreeData: vscode.Event<Item | undefined> =
 		this._onDidChangeTreeData.event;
@@ -38,18 +54,28 @@ export default class ExplorerDataProvider
 	}
 
 	async getTreeItem(element: Item): Promise<vscode.TreeItem> {
+		let treeItem: vscode.TreeItem;
+		
 		if (element instanceof CollectionItem) {
-			return this.getCollectionWithSize(element);
+			treeItem = await this.getCollectionWithSize(element);
 		} else if (element instanceof DocumentItem) {
-			return this.getDocumentWithSize(element);
+			treeItem = await this.getDocumentWithSize(element);
 		} else if (
 			element instanceof KeyItem ||
 			element instanceof NestedKeyItem
 		) {
-			return element; // KeyItem and NestedKeyItem don't need additional processing
+			treeItem = element; // KeyItem and NestedKeyItem don't need additional processing
 		} else {
-			return element;
+			treeItem = element;
 		}
+
+		// Add pin indicator to the label if the item is pinned
+		if (this.isItemPinned(element)) {
+			const originalLabel = treeItem.label?.toString() || "";
+			treeItem.label = `📌 ${originalLabel}`;
+		}
+
+		return treeItem;
 	}
 
 	async getParent(element: Item): Promise<Item | undefined> {
@@ -78,23 +104,29 @@ export default class ExplorerDataProvider
 		if (!element) {
 			const refs = await firestore.listCollections();
 
-			return refs.map(
+			const items = refs.map(
 				(ref) =>
 					new CollectionItem(ref.id, ref, {
 						fieldName: this._orderBy[ref.path]?.field ?? "id",
 						direction: this._orderBy[ref.path]?.direction ?? "asc",
 					})
 			);
+
+			// Sort items: pinned items first, then alphabetically
+			return this.sortWithPinnedFirst(items);
 		} else if (element instanceof DocumentItem) {
 			const refs = await element.reference.listCollections();
 
-			return refs.map(
+			const items = refs.map(
 				(ref) =>
 					new CollectionItem(ref.id, ref, {
 						fieldName: this._orderBy[ref.path]?.field ?? "id",
 						direction: this._orderBy[ref.path]?.direction ?? "asc",
 					})
 			);
+
+			// Sort items: pinned items first, then alphabetically
+			return this.sortWithPinnedFirst(items);
 		} else if (element instanceof KeyItem) {
 			// Get nested keys for a specific key in the collection
 			return this.getNestedKeys(element);
@@ -151,10 +183,11 @@ export default class ExplorerDataProvider
 		});
 
 		if (items.length > limit) {
-			items.pop();
-			return [...items, new ShowMoreItemsItem(element.reference, limit)];
+			const documents = items.slice(0, -1); // Remove the extra item
+			const sortedDocuments = this.sortWithPinnedFirst(documents);
+			return [...sortedDocuments, new ShowMoreItemsItem(element.reference, limit)];
 		} else {
-			return items;
+			return this.sortWithPinnedFirst(items);
 		}
 	}
 
@@ -229,10 +262,8 @@ export default class ExplorerDataProvider
 				);
 			});
 
-			// Sort keys alphabetically
-			keyItems.sort((a, b) => a.keyName.localeCompare(b.keyName));
-
-			return keyItems;
+			// Sort keys: pinned first, then alphabetically
+			return this.sortWithPinnedFirst(keyItems);
 		} catch (error) {
 			console.error("Failed to get collection keys:", error);
 			return [];
@@ -342,12 +373,8 @@ export default class ExplorerDataProvider
 				);
 			});
 
-			// Sort nested keys alphabetically
-			nestedKeyItems.sort((a, b) =>
-				a.nestedKeyName.localeCompare(b.nestedKeyName)
-			);
-
-			return nestedKeyItems;
+			// Sort nested keys: pinned first, then alphabetically
+			return this.sortWithPinnedFirst(nestedKeyItems);
 		} catch (error) {
 			console.error("Failed to get nested keys:", error);
 			return [];
@@ -596,5 +623,70 @@ export default class ExplorerDataProvider
 			direction,
 		};
 		this.refresh();
+	}
+
+	/**
+	 * Sort items with pinned items first, then alphabetically
+	 */
+	private sortWithPinnedFirst<T extends Item>(items: T[]): T[] {
+		return items.sort((a, b) => {
+			const aPath = this.getItemPath(a);
+			const bPath = this.getItemPath(b);
+			const aPinned = this._pinnedItems.has(aPath);
+			const bPinned = this._pinnedItems.has(bPath);
+
+			// If one is pinned and the other isn't, pinned goes first
+			if (aPinned && !bPinned) {
+				return -1;
+			}
+			if (!aPinned && bPinned) {
+				return 1;
+			}
+
+			// If both are pinned or both are not pinned, sort alphabetically
+			return a.label!.toString().localeCompare(b.label!.toString());
+		});
+	}
+
+	/**
+	 * Get the path identifier for an item (used for pinning)
+	 */
+	private getItemPath(item: Item): string {
+		if (item instanceof CollectionItem || item instanceof DocumentItem) {
+			return item.reference.path;
+		} else if (item instanceof KeyItem) {
+			return item.reference;
+		} else if (item instanceof NestedKeyItem) {
+			return item.reference;
+		}
+		return item.id || item.label?.toString() || "";
+	}
+
+	/**
+	 * Pin an item to the top of the tree view
+	 */
+	async pinItem(item: Item): Promise<void> {
+		const path = this.getItemPath(item);
+		this._pinnedItems.add(path);
+		await this.savePinnedItems();
+		this.refresh();
+	}
+
+	/**
+	 * Unpin an item from the top of the tree view
+	 */
+	async unpinItem(item: Item): Promise<void> {
+		const path = this.getItemPath(item);
+		this._pinnedItems.delete(path);
+		await this.savePinnedItems();
+		this.refresh();
+	}
+
+	/**
+	 * Check if an item is pinned
+	 */
+	isItemPinned(item: Item): boolean {
+		const path = this.getItemPath(item);
+		return this._pinnedItems.has(path);
 	}
 }

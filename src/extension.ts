@@ -5,6 +5,8 @@ import init from "./commands/init";
 import orderBy from "./commands/oderBy";
 import openPath from "./commands/openPath";
 import openServiceAccountSettings from "./commands/openServiceAccountSettings";
+import pinItem from "./commands/pinItem";
+import unpinItem from "./commands/unpinItem";
 import toggleViewMode from "./commands/toggleViewMode";
 import { scheme } from "./constants";
 import { DocumentFileSystemProvider } from "./editor/DocumentFileSystemProvider";
@@ -75,6 +77,20 @@ export async function activate(context: vscode.ExtensionContext) {
 				await toggleViewMode();
 				explorerDataProvider.refresh();
 			}
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			"firestore-explorer.pinItem",
+			(item: Item) => pinItem(item, explorerDataProvider)
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			"firestore-explorer.unpinItem",
+			(item: Item) => unpinItem(item, explorerDataProvider)
 		)
 	);
 	context.subscriptions.push(explorerView);

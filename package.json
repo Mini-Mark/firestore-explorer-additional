@@ -21,6 +21,8 @@
 		"onCommand:firestore-explorer.refreshExplorer",
 		"onCommand:firestore-explorer.showMoreItems",
 		"onCommand:firestore-explorer.toggleViewMode",
+		"onCommand:firestore-explorer.pinItem",
+		"onCommand:firestore-explorer.unpinItem",
 		"onView:firestore-explorer-view"
 	],
 	"main": "./out/extension.js",
@@ -46,6 +48,14 @@
 					],
 					"default": "firebase",
 					"description": "Display mode: 'firebase' shows Firebase structure, 'detailed' shows all keys within collections"
+				},
+				"firestore-explorer.pinnedItems": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "List of pinned collection and document paths"
 				}
 			}
 		},
@@ -114,6 +124,16 @@
 				"command": "firestore-explorer.showMoreItems",
 				"title": "Show More Items",
 				"enablement": "false"
+			},
+			{
+				"command": "firestore-explorer.pinItem",
+				"title": "Pin to Top",
+				"icon": "$(pin)"
+			},
+			{
+				"command": "firestore-explorer.unpinItem",
+				"title": "Unpin from Top",
+				"icon": "$(pinned)"
 			}
 		],
 		"menus": {
@@ -141,6 +161,16 @@
 				{
 					"command": "firestore-explorer.orderBy",
 					"when": "view == firestore-explorer-view && viewItem == collection"
+				},
+				{
+					"command": "firestore-explorer.pinItem",
+					"when": "view == firestore-explorer-view && (viewItem == collection || viewItem == document || viewItem == key || viewItem == nested-key)",
+					"group": "navigation@1"
+				},
+				{
+					"command": "firestore-explorer.unpinItem",
+					"when": "view == firestore-explorer-view && (viewItem == collection || viewItem == document || viewItem == key || viewItem == nested-key)",
+					"group": "navigation@2"
 				}
 			],
 			"commandPalette": [
@@ -158,6 +188,14 @@
 				},
 				{
 					"command": "firestore-explorer.showMoreItems",
+					"when": "false"
+				},
+				{
+					"command": "firestore-explorer.pinItem",
+					"when": "false"
+				},
+				{
+					"command": "firestore-explorer.unpinItem",
 					"when": "false"
 				}
 			]
