@@ -17,7 +17,9 @@ export default async function unpinItem(
 		);
 	} catch (error) {
 		vscode.window.showErrorMessage(
-			`Failed to unpin item: ${error instanceof Error ? error.message : "Unknown error"}`
+			`Failed to unpin item: ${
+				error instanceof Error ? error.message : "Unknown error"
+			}`
 		);
 	}
 }

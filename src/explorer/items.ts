@@ -333,6 +333,7 @@ export class ShowMoreItemsItem extends Item {
 		this.id = reference.path + "///showMore";
 		this.offset = offset;
 		this.iconPath = new vscode.ThemeIcon("more");
+		this.contextValue = "show-more";
 		this.command = {
 			command: "firestore-explorer.showMoreItems",
 			title: "More Items",
@@ -341,4 +342,32 @@ export class ShowMoreItemsItem extends Item {
 	}
 
 	// TODO: Show progress animation when loading more items
+}
+
+/**
+ * A Tree View item representing the "Show more" button for the pinned view
+ */
+export class PinnedShowMoreItemsItem extends Item {
+	reference: admin.firestore.CollectionReference;
+	offset: number;
+
+	constructor(
+		reference: admin.firestore.CollectionReference,
+		offset: number
+	) {
+		const pagingLimit = vscode.workspace
+			.getConfiguration()
+			.get("firestore-explorer.pagingLimit") as number;
+		super(`Load ${pagingLimit} more`, vscode.TreeItemCollapsibleState.None);
+		this.reference = reference;
+		this.id = reference.path + "///pinnedShowMore";
+		this.offset = offset;
+		this.iconPath = new vscode.ThemeIcon("more");
+		this.contextValue = "pinned-show-more";
+		this.command = {
+			command: "firestore-pinned.showMoreItems",
+			title: "More Items",
+			arguments: [reference.path],
+		};
+	}
 }

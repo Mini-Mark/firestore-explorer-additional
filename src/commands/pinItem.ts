@@ -17,7 +17,9 @@ export default async function pinItem(
 		);
 	} catch (error) {
 		vscode.window.showErrorMessage(
-			`Failed to pin item: ${error instanceof Error ? error.message : "Unknown error"}`
+			`Failed to pin item: ${
+				error instanceof Error ? error.message : "Unknown error"
+			}`
 		);
 	}
 }

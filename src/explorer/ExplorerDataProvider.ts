@@ -30,6 +30,7 @@ export default class ExplorerDataProvider
 		};
 	} = {};
 	private _pinnedItems: Set<string> = new Set();
+	private _saveTimeout: NodeJS.Timeout | undefined;
 
 	constructor() {
 		this.loadPinnedItems();
@@ -42,8 +43,16 @@ export default class ExplorerDataProvider
 	}
 
 	private async savePinnedItems(): Promise<void> {
-		const config = vscode.workspace.getConfiguration("firestore-explorer");
-		await config.update("pinnedItems", Array.from(this._pinnedItems), vscode.ConfigurationTarget.Workspace);
+		// Debounce saves to avoid rapid successive config writes
+		if (this._saveTimeout) {
+			clearTimeout(this._saveTimeout);
+		}
+		
+		this._saveTimeout = setTimeout(async () => {
+			const config = vscode.workspace.getConfiguration("firestore-explorer");
+			await config.update("pinnedItems", Array.from(this._pinnedItems), vscode.ConfigurationTarget.Workspace);
+			this._saveTimeout = undefined;
+		}, 100); // 100ms debounce
 	}
 
 	readonly onDidChangeTreeData: vscode.Event<Item | undefined> =
@@ -674,7 +683,9 @@ export default class ExplorerDataProvider
 		const path = this.getItemPath(item);
 		this._pinnedItems.add(path);
 		await this.savePinnedItems();
-		this.refresh();
+		
+		// Instead of full refresh, just update the affected tree items
+		this.refreshItem(item);
 	}
 
 	/**
@@ -684,7 +695,32 @@ export default class ExplorerDataProvider
 		const path = this.getItemPath(item);
 		this._pinnedItems.delete(path);
 		await this.savePinnedItems();
-		this.refresh();
+		
+		// Instead of full refresh, just update the affected tree items
+		this.refreshItem(item);
+	}
+
+	/**
+	 * Refresh only specific tree items instead of the entire tree
+	 */
+	private refreshItem(item: Item): void {
+		// Fire change event for the specific item to update its appearance
+		this._onDidChangeTreeData.fire(item);
+		
+		// Also refresh parent to update sorting order
+		if (item instanceof DocumentItem || item instanceof CollectionItem) {
+			// For root collections, refresh the root
+			if (item instanceof CollectionItem && !item.reference.parent) {
+				this._onDidChangeTreeData.fire(undefined);
+			} else {
+				// For nested items, refresh their parent
+				this.getParent(item).then(parent => {
+					if (parent) {
+						this._onDidChangeTreeData.fire(parent);
+					}
+				});
+			}
+		}
 	}
 
 	/**
@@ -693,5 +729,12 @@ export default class ExplorerDataProvider
 	isItemPinned(item: Item): boolean {
 		const path = this.getItemPath(item);
 		return this._pinnedItems.has(path);
+	}
+
+	/**
+	 * Get all pinned item paths for efficient lookup
+	 */
+	getPinnedItemsPaths(): Set<string> {
+		return this._pinnedItems;
 	}
 }

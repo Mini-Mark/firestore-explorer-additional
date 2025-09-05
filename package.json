@@ -20,10 +20,12 @@
 		"onCommand:firestore-explorer.setServiceAccountKeyPath",
 		"onCommand:firestore-explorer.refreshExplorer",
 		"onCommand:firestore-explorer.showMoreItems",
+		"onCommand:firestore-pinned.showMoreItems",
 		"onCommand:firestore-explorer.toggleViewMode",
 		"onCommand:firestore-explorer.pinItem",
 		"onCommand:firestore-explorer.unpinItem",
-		"onView:firestore-explorer-view"
+		"onView:firestore-explorer-view",
+		"onView:firestore-pinned-view"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -76,6 +78,13 @@
 					"icon": "media/activity-bar.svg",
 					"visibility": "visible",
 					"when": "config.firestore-explorer.serviceAccountKeyPath != ''"
+				},
+				{
+					"id": "firestore-pinned-view",
+					"name": "Pinned Items",
+					"icon": "$(pin)",
+					"visibility": "visible",
+					"when": "config.firestore-explorer.serviceAccountKeyPath != ''"
 				}
 			]
 		},
@@ -83,6 +92,10 @@
 			{
 				"view": "firestore-explorer-view",
 				"contents": "No Firebase service account found [learn how to get yours](https://firebase.google.com/docs/admin/setup#initialize_the_sdk).\n[Open configuration](command:firestore-explorer.setServiceAccountKeyPath)"
+			},
+			{
+				"view": "firestore-pinned-view",
+				"contents": "No pinned items yet.\n\nRight-click on any collection, document, or key in the main view and select \"Pin to Top\" to add items here."
 			}
 		],
 		"commands": [
@@ -126,6 +139,11 @@
 				"enablement": "false"
 			},
 			{
+				"command": "firestore-pinned.showMoreItems",
+				"title": "Show More Items",
+				"enablement": "false"
+			},
+			{
 				"command": "firestore-explorer.pinItem",
 				"title": "Pin to Top",
 				"icon": "$(pin)"
@@ -152,15 +170,15 @@
 			"view/item/context": [
 				{
 					"command": "firestore-explorer.copyPath",
-					"when": "view == firestore-explorer-view"
+					"when": "view == firestore-explorer-view || view == firestore-pinned-view"
 				},
 				{
 					"command": "firestore-explorer.copyJson",
-					"when": "view == firestore-explorer-view"
+					"when": "view == firestore-explorer-view || view == firestore-pinned-view"
 				},
 				{
 					"command": "firestore-explorer.orderBy",
-					"when": "view == firestore-explorer-view && viewItem == collection"
+					"when": "(view == firestore-explorer-view || view == firestore-pinned-view) && viewItem == collection"
 				},
 				{
 					"command": "firestore-explorer.pinItem",
@@ -168,8 +186,13 @@
 					"group": "navigation@1"
 				},
 				{
+					"command": "firestore-explorer.pinItem",
+					"when": "view == firestore-pinned-view && (viewItem == collection || viewItem == document || viewItem == key || viewItem == nested-key)",
+					"group": "navigation@1"
+				},
+				{
 					"command": "firestore-explorer.unpinItem",
-					"when": "view == firestore-explorer-view && (viewItem == collection-pinned || viewItem == document-pinned || viewItem == key-pinned || viewItem == nested-key-pinned)",
+					"when": "(view == firestore-explorer-view && (viewItem == collection-pinned || viewItem == document-pinned || viewItem == key-pinned || viewItem == nested-key-pinned)) || (view == firestore-pinned-view && (viewItem == collection-pinned || viewItem == document-pinned || viewItem == key-pinned || viewItem == nested-key-pinned))",
 					"group": "navigation@1"
 				}
 			],
@@ -188,6 +211,10 @@
 				},
 				{
 					"command": "firestore-explorer.showMoreItems",
+					"when": "false"
+				},
+				{
+					"command": "firestore-pinned.showMoreItems",
 					"when": "false"
 				},
 				{
