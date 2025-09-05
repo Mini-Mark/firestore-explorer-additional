@@ -169,8 +169,8 @@
 				},
 				{
 					"command": "firestore-explorer.unpinItem",
-					"when": "view == firestore-explorer-view && (viewItem == collection || viewItem == document || viewItem == key || viewItem == nested-key)",
-					"group": "navigation@2"
+					"when": "view == firestore-explorer-view && (viewItem == collection-pinned || viewItem == document-pinned || viewItem == key-pinned || viewItem == nested-key-pinned)",
+					"group": "navigation@1"
 				}
 			],
 			"commandPalette": [

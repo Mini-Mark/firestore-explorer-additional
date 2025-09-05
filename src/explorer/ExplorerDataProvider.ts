@@ -69,10 +69,15 @@ export default class ExplorerDataProvider
 			treeItem = element;
 		}
 
-		// Add pin indicator to the label if the item is pinned
+		// Update contextValue and label based on pin status
 		if (this.isItemPinned(element)) {
+			// Add pin indicator to the label
 			const originalLabel = treeItem.label?.toString() || "";
 			treeItem.label = `📌 ${originalLabel}`;
+			
+			// Update contextValue to indicate pinned status
+			const originalContextValue = treeItem.contextValue || "";
+			treeItem.contextValue = `${originalContextValue}-pinned`;
 		}
 
 		return treeItem;
