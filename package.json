@@ -103,6 +103,10 @@
 				"title": "Copy Path"
 			},
 			{
+				"command": "firestore-explorer.copyJson",
+				"title": "Copy JSON"
+			},
+			{
 				"command": "firestore-explorer.orderBy",
 				"title": "Order by..."
 			},
@@ -131,6 +135,10 @@
 					"when": "view == firestore-explorer-view"
 				},
 				{
+					"command": "firestore-explorer.copyJson",
+					"when": "view == firestore-explorer-view"
+				},
+				{
 					"command": "firestore-explorer.orderBy",
 					"when": "view == firestore-explorer-view && viewItem == collection"
 				}
@@ -138,6 +146,10 @@
 			"commandPalette": [
 				{
 					"command": "firestore-explorer.copyPath",
+					"when": "false"
+				},
+				{
+					"command": "firestore-explorer.copyJson",
 					"when": "false"
 				},
 				{

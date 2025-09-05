@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import copyPath from "./commands/copyPath";
+import copyJson from "./commands/copyJson";
 import init from "./commands/init";
 import orderBy from "./commands/oderBy";
 import openPath from "./commands/openPath";
@@ -47,6 +48,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand("firestore-explorer.copyPath", copyPath)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("firestore-explorer.copyJson", copyJson)
 	);
 
 	context.subscriptions.push(
