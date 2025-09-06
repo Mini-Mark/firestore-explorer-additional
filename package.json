@@ -15,6 +15,7 @@
 		"Other"
 	],
 	"activationEvents": [
+		"onChatParticipant:myDatabase",
 		"onCommand:firestore-explorer.init",
 		"onCommand:firestore-explorer.openPath",
 		"onCommand:firestore-explorer.setServiceAccountKeyPath",
@@ -29,6 +30,13 @@
 	],
 	"main": "./out/extension.js",
 	"contributes": {
+		"chatParticipants": [
+			{
+				"name": "myDatabase",
+				"id": "myDatabase",
+				"description": "Query my database in VS Code Chat"
+			}
+		],
 		"configuration": {
 			"title": "Firestore Explorer",
 			"properties": {

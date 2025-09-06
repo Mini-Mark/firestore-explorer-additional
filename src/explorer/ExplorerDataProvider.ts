@@ -38,7 +38,7 @@ export default class ExplorerDataProvider
 
 	private loadPinnedItems(): void {
 		const config = vscode.workspace.getConfiguration("firestore-explorer");
-		const pinnedItems = config.get("pinnedItems") as string[] || [];
+		const pinnedItems = (config.get("pinnedItems") as string[]) || [];
 		this._pinnedItems = new Set(pinnedItems);
 	}
 
@@ -47,10 +47,15 @@ export default class ExplorerDataProvider
 		if (this._saveTimeout) {
 			clearTimeout(this._saveTimeout);
 		}
-		
+
 		this._saveTimeout = setTimeout(async () => {
-			const config = vscode.workspace.getConfiguration("firestore-explorer");
-			await config.update("pinnedItems", Array.from(this._pinnedItems), vscode.ConfigurationTarget.Workspace);
+			const config =
+				vscode.workspace.getConfiguration("firestore-explorer");
+			await config.update(
+				"pinnedItems",
+				Array.from(this._pinnedItems),
+				vscode.ConfigurationTarget.Workspace
+			);
 			this._saveTimeout = undefined;
 		}, 100); // 100ms debounce
 	}
@@ -64,7 +69,7 @@ export default class ExplorerDataProvider
 
 	async getTreeItem(element: Item): Promise<vscode.TreeItem> {
 		let treeItem: vscode.TreeItem;
-		
+
 		if (element instanceof CollectionItem) {
 			treeItem = await this.getCollectionWithSize(element);
 		} else if (element instanceof DocumentItem) {
@@ -83,7 +88,7 @@ export default class ExplorerDataProvider
 			// Add pin indicator to the label
 			const originalLabel = treeItem.label?.toString() || "";
 			treeItem.label = `📌 ${originalLabel}`;
-			
+
 			// Update contextValue to indicate pinned status
 			const originalContextValue = treeItem.contextValue || "";
 			treeItem.contextValue = `${originalContextValue}-pinned`;
@@ -199,7 +204,10 @@ export default class ExplorerDataProvider
 		if (items.length > limit) {
 			const documents = items.slice(0, -1); // Remove the extra item
 			const sortedDocuments = this.sortWithPinnedFirst(documents);
-			return [...sortedDocuments, new ShowMoreItemsItem(element.reference, limit)];
+			return [
+				...sortedDocuments,
+				new ShowMoreItemsItem(element.reference, limit),
+			];
 		} else {
 			return this.sortWithPinnedFirst(items);
 		}
@@ -683,7 +691,7 @@ export default class ExplorerDataProvider
 		const path = this.getItemPath(item);
 		this._pinnedItems.add(path);
 		await this.savePinnedItems();
-		
+
 		// Instead of full refresh, just update the affected tree items
 		this.refreshItem(item);
 	}
@@ -695,7 +703,7 @@ export default class ExplorerDataProvider
 		const path = this.getItemPath(item);
 		this._pinnedItems.delete(path);
 		await this.savePinnedItems();
-		
+
 		// Instead of full refresh, just update the affected tree items
 		this.refreshItem(item);
 	}
@@ -706,7 +714,7 @@ export default class ExplorerDataProvider
 	private refreshItem(item: Item): void {
 		// Fire change event for the specific item to update its appearance
 		this._onDidChangeTreeData.fire(item);
-		
+
 		// Also refresh parent to update sorting order
 		if (item instanceof DocumentItem || item instanceof CollectionItem) {
 			// For root collections, refresh the root
@@ -714,7 +722,7 @@ export default class ExplorerDataProvider
 				this._onDidChangeTreeData.fire(undefined);
 			} else {
 				// For nested items, refresh their parent
-				this.getParent(item).then(parent => {
+				this.getParent(item).then((parent) => {
 					if (parent) {
 						this._onDidChangeTreeData.fire(parent);
 					}

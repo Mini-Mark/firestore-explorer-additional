@@ -22,7 +22,9 @@ export default class PinnedDataProvider
 	private _onDidChangeTreeData = new vscode.EventEmitter<Item | undefined>();
 	private _paging: { [key: string]: number } = {};
 	private _mainProvider: ExplorerDataProvider;
-	private _collectionScanCache: { [collectionPath: string]: { hassPinned: boolean; lastChecked: number } } = {};
+	private _collectionScanCache: {
+		[collectionPath: string]: { hassPinned: boolean; lastChecked: number };
+	} = {};
 	private _cacheTimeout = 30000; // 30 seconds cache
 
 	readonly onDidChangeTreeData: vscode.Event<Item | undefined> =
@@ -57,13 +59,46 @@ export default class PinnedDataProvider
 		// Use the main provider's getTreeItem but ensure pinned items show appropriate context
 		const treeItem = await this._mainProvider.getTreeItem(element);
 
-		// Remove the pin emoji from the label since we're in the pinned panel
-		if (
-			treeItem.label &&
-			typeof treeItem.label === "string" &&
-			treeItem.label.startsWith("📌 ")
-		) {
-			treeItem.label = treeItem.label.substring(2); // Remove "📌 "
+		// Keep the pin emoji for directly pinned items in the pinned panel
+		// Don't remove it - this helps distinguish between directly pinned items and parent containers
+
+		// Add visual indicators for documents that contain pinned subcollections
+		if (element instanceof DocumentItem) {
+			const isDirectlyPinned = this._mainProvider.isItemPinned(element);
+			const hassPinnedSubcollections =
+				this.documentHasPinnedSubcollections(element);
+
+			if (!isDirectlyPinned && hassPinnedSubcollections) {
+				// Document isn't pinned but contains pinned items - add indicator
+				if (treeItem.label && typeof treeItem.label === "string") {
+					treeItem.label = `${treeItem.label}`;
+				}
+				treeItem.tooltip = `Contains pinned items\n${
+					treeItem.tooltip || ""
+				}`;
+			}
+		}
+
+		// Add visual indicators for collections that contain pinned documents
+		if (element instanceof CollectionItem) {
+			const isDirectlyPinned = this._mainProvider.isItemPinned(element);
+
+			if (!isDirectlyPinned) {
+				// Check if collection contains pinned items
+				const hassPinnedItems = await this.collectionHasPinnedDocuments(
+					element.reference
+				);
+
+				if (hassPinnedItems) {
+					// Collection isn't pinned but contains pinned items - add indicator
+					if (treeItem.label && typeof treeItem.label === "string") {
+						treeItem.label = `${treeItem.label}`;
+					}
+					treeItem.tooltip = `Contains pinned items\n${
+						treeItem.tooltip || ""
+					}`;
+				}
+			}
 		}
 
 		// For items in the pinned panel, we want to show the unpin option
@@ -198,8 +233,13 @@ export default class PinnedDataProvider
 
 				allDocuments.push(documentItem);
 
-				// Check if this document is pinned
-				if (this._mainProvider.isItemPinned(documentItem)) {
+				// Check if this document is pinned OR has pinned subcollections
+				const isDirectlyPinned =
+					this._mainProvider.isItemPinned(documentItem);
+				const hassPinnedSubcollections =
+					this.documentHasPinnedSubcollections(documentItem);
+
+				if (isDirectlyPinned || hassPinnedSubcollections) {
 					pinnedDocuments.push(documentItem);
 				}
 			});
@@ -270,31 +310,31 @@ export default class PinnedDataProvider
 	): Promise<boolean> {
 		const collectionPath = collectionRef.path;
 		const now = Date.now();
-		
+
 		// Check cache first
 		const cached = this._collectionScanCache[collectionPath];
-		if (cached && (now - cached.lastChecked) < this._cacheTimeout) {
+		if (cached && now - cached.lastChecked < this._cacheTimeout) {
 			return cached.hassPinned;
 		}
 
 		try {
 			// Quick check: use pinned items set for faster lookup
 			let hassPinned = false;
-			
+
 			// First, check if any pinned items match this collection path pattern
 			for (const pinnedPath of this._mainProvider.getPinnedItemsPaths()) {
-				if (pinnedPath.startsWith(collectionPath + '/')) {
+				if (pinnedPath.startsWith(collectionPath + "/")) {
 					hassPinned = true;
 					break;
 				}
 			}
-			
+
 			// Cache the result
 			this._collectionScanCache[collectionPath] = {
 				hassPinned,
-				lastChecked: now
+				lastChecked: now,
 			};
-			
+
 			return hassPinned;
 		} catch (error) {
 			console.error(
@@ -303,5 +343,21 @@ export default class PinnedDataProvider
 			);
 			return false;
 		}
+	}
+
+	/**
+	 * Check if a document has any pinned subcollections or nested items
+	 */
+	private documentHasPinnedSubcollections(document: DocumentItem): boolean {
+		const documentPath = document.reference.path;
+
+		// Check if any pinned items are under this document's path
+		for (const pinnedPath of this._mainProvider.getPinnedItemsPaths()) {
+			if (pinnedPath.startsWith(documentPath + "/")) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }
