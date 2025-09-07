@@ -160,6 +160,10 @@
 				"command": "firestore-explorer.unpinItem",
 				"title": "Unpin from Top",
 				"icon": "$(pinned)"
+			},
+			{
+				"command": "firestore-explorer.openWithPromptGenerate",
+				"title": "Open With Prompt Generate"
 			}
 		],
 		"menus": {
@@ -202,6 +206,11 @@
 					"command": "firestore-explorer.unpinItem",
 					"when": "(view == firestore-explorer-view && (viewItem == collection-pinned || viewItem == document-pinned || viewItem == key-pinned || viewItem == nested-key-pinned)) || (view == firestore-pinned-view && (viewItem == collection-pinned || viewItem == document-pinned || viewItem == key-pinned || viewItem == nested-key-pinned))",
 					"group": "navigation@1"
+				},
+				{
+					"command": "firestore-explorer.openWithPromptGenerate",
+					"when": "view == firestore-explorer-view || view == firestore-pinned-view",
+					"group": "navigation@2"
 				}
 			],
 			"commandPalette": [

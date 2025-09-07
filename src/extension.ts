@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as admin from "firebase-admin";
 import copyPath from "./commands/copyPath";
 import copyJson from "./commands/copyJson";
 import init from "./commands/init";
@@ -14,6 +15,7 @@ import ExplorerDataProvider from "./explorer/ExplorerDataProvider";
 import PinnedDataProvider from "./explorer/PinnedDataProvider";
 import { Item } from "./explorer/items";
 import initializeFirestore from "./utilities/initializeFirestore";
+import openWithPromptGenerate from "./commands/openWithPromptGenerate";
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -110,6 +112,25 @@ export async function activate(context: vscode.ExtensionContext) {
 			async (item: Item) => {
 				await unpinItem(item, explorerDataProvider);
 				pinnedDataProvider.refreshItem(); // Refresh pinned panel
+			}
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			"firestore-explorer.openWithPromptGenerate",
+			(item: Item) => {
+				// Only works for DocumentItem which has a DocumentReference
+				if (
+					"reference" in item &&
+					item.reference &&
+					typeof item.reference === "object" &&
+					"path" in item.reference
+				) {
+					return openWithPromptGenerate(
+						item.reference as admin.firestore.DocumentReference
+					);
+				}
 			}
 		)
 	);
