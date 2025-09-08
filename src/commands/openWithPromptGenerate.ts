@@ -73,11 +73,41 @@ function generateFieldTable(json: any, prefix: string = ""): string {
 	return rows;
 }
 
+function formatPathWithLabels(path: string): string {
+	const segments = path.split("/");
+	const formattedSegments: string[] = [];
+
+	for (let i = 0; i < segments.length; i++) {
+		const segment = segments[i];
+
+		if (i % 2 === 0) {
+			// Even index = collection name
+			formattedSegments.push(segment);
+		} else {
+			// Odd index = document ID (potentially a UID)
+			// Check if it looks like a UID (alphanumeric, 20+ chars, or specific patterns)
+			const isUID =
+				/^[a-zA-Z0-9_-]{15,}$/.test(segment) ||
+				/^[a-zA-Z0-9]{20,}$/.test(segment) ||
+				segment.length > 25;
+
+			if (isUID) {
+				formattedSegments.push(`{uid}`);
+			} else {
+				formattedSegments.push(segment);
+			}
+		}
+	}
+
+	return formattedSegments.join("/");
+}
+
 export default async function openWithPromptGenerate(
 	documentReference: admin.firestore.DocumentReference
 ) {
 	// Get the Firestore path for the item
 	const path = documentReference.path;
+	const formattedPath = formatPathWithLabels(path);
 
 	// Try to get JSON structure/sample data
 	let jsonDetail = "(no data available)";
@@ -92,15 +122,30 @@ export default async function openWithPromptGenerate(
 		}
 	} catch {}
 
-	const doc = await vscode.workspace.openTextDocument({
-		content:
-			`# Firestore Path: ${path}\n\n` +
-			`## Field Summary\n\n${fieldTable}\n` +
-			`## Sample JSON Structure\n\n\`\`\`json\n${jsonDetail}\n\`\`\`\n`,
-		language: "markdown",
-	});
+	// Create a safe filename from the path
+	const safePath = path.replace(/[\/\\:*?"<>|]/g, "_");
+	const fileName = `firestore_${safePath}.md`;
+
+	const content =
+		`# Firestore Document\n\n` +
+		`**Raw Path:** \`${path}\`\n\n` +
+		`**Structured Path:** \`${formattedPath}\`\n\n` +
+		`## Field Summary\n\n${fieldTable}\n` +
+		`## Sample JSON Structure\n\n\`\`\`json\n${jsonDetail}\n\`\`\`\n`;
+
+	// Create a URI for the preview file
+	const uri = vscode.Uri.parse(`untitled:${fileName}`);
+
+	const doc = await vscode.workspace.openTextDocument(uri);
+	const edit = new vscode.WorkspaceEdit();
+	edit.insert(uri, new vscode.Position(0, 0), content);
+	await vscode.workspace.applyEdit(edit);
+
 	await vscode.window.showTextDocument(doc, {
-		preview: false,
-		preserveFocus: true,
+		preview: true,
+		preserveFocus: false,
 	});
+
+	// Set the language to markdown
+	await vscode.languages.setTextDocumentLanguage(doc, "markdown");
 }
