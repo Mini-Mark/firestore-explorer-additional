@@ -16,6 +16,7 @@ import PinnedDataProvider from "./explorer/PinnedDataProvider";
 import { Item } from "./explorer/items";
 import initializeFirestore from "./utilities/initializeFirestore";
 import openWithPromptGenerate from "./commands/openWithPromptGenerate";
+import openFilter from "./commands/openFilter";
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -190,6 +191,23 @@ export async function activate(context: vscode.ExtensionContext) {
 				await toggleViewMode();
 				explorerDataProvider.refresh();
 				pinnedDataProvider.refresh();
+			}
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			"firestore-explorer.openFilter",
+			(item: Item) => {
+				// Only works for CollectionItem
+				if (
+					"reference" in item &&
+					item.reference &&
+					typeof item.reference === "object" &&
+					"path" in item.reference
+				) {
+					return openFilter(item as any);
+				}
 			}
 		)
 	);

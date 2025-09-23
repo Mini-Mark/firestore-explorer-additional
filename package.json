@@ -25,6 +25,7 @@
 		"onCommand:firestore-explorer.toggleViewMode",
 		"onCommand:firestore-explorer.pinItem",
 		"onCommand:firestore-explorer.unpinItem",
+		"onCommand:firestore-explorer.openFilter",
 		"onView:firestore-explorer-view",
 		"onView:firestore-pinned-view"
 	],
@@ -164,6 +165,11 @@
 			{
 				"command": "firestore-explorer.openWithPromptGenerate",
 				"title": "Open With Prompt Generate"
+			},
+			{
+				"command": "firestore-explorer.openFilter",
+				"title": "Open Filter",
+				"icon": "$(filter)"
 			}
 		],
 		"menus": {
@@ -181,12 +187,6 @@
 			],
 			"view/item/context": [
 				{
-					"command": "firestore-explorer.showMoreItems",
-					"when": "(view == firestore-explorer-view || view == firestore-pinned-view) && viewItem == show-more",
-					"group": "navigation@0",
-					"title": "Show All Items"
-				},
-				{
 					"command": "firestore-explorer.copyPath",
 					"when": "view == firestore-explorer-view || view == firestore-pinned-view"
 				},
@@ -197,6 +197,11 @@
 				{
 					"command": "firestore-explorer.orderBy",
 					"when": "(view == firestore-explorer-view || view == firestore-pinned-view) && viewItem == collection"
+				},
+				{
+					"command": "firestore-explorer.openFilter",
+					"when": "(view == firestore-explorer-view || view == firestore-pinned-view) && viewItem == collection",
+					"group": "navigation@3"
 				},
 				{
 					"command": "firestore-explorer.pinItem",
@@ -246,6 +251,10 @@
 				},
 				{
 					"command": "firestore-explorer.unpinItem",
+					"when": "false"
+				},
+				{
+					"command": "firestore-explorer.openFilter",
 					"when": "false"
 				}
 			]
