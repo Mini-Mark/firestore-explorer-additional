@@ -79,6 +79,11 @@ export default class ExplorerDataProvider
 			element instanceof NestedKeyItem
 		) {
 			treeItem = element; // KeyItem and NestedKeyItem don't need additional processing
+		} else if (element instanceof ShowMoreItemsItem) {
+			// Handle ShowMoreItemsItem specifically
+			console.log(`[DEBUG] getTreeItem for ShowMoreItemsItem:`, element);
+			console.log(`[DEBUG] ShowMoreItemsItem command:`, element.command);
+			treeItem = element;
 		} else {
 			treeItem = element;
 		}
@@ -155,8 +160,14 @@ export default class ExplorerDataProvider
 		} else if (element instanceof CollectionItem) {
 			// Check view mode to determine what to show
 			if (viewMode === "detailed") {
+				console.log(
+					`[DEBUG] Using detailed mode for collection: ${element.reference.path}`
+				);
 				return this.getCollectionKeys(element);
 			} else {
+				console.log(
+					`[DEBUG] Using firebase mode for collection: ${element.reference.path}`
+				);
 				return this.getCollectionDocuments(element);
 			}
 		}
@@ -168,12 +179,15 @@ export default class ExplorerDataProvider
 	private async getCollectionDocuments(
 		element: CollectionItem
 	): Promise<Item[]> {
-		const limit =
+		const limit: number =
 			this._paging[element.reference.path] ??
-			vscode.workspace
+			(vscode.workspace
 				.getConfiguration()
-				.get("firestore-explorer.pagingLimit");
+				.get("firestore-explorer.pagingLimit") as number);
 
+		console.log(
+			`[DEBUG] Loading collection ${element.reference.path} with limit: ${limit}`
+		);
 		console.log(
 			this._orderBy[element.reference.path]?.field ??
 				admin.firestore.FieldPath.documentId()
@@ -204,11 +218,19 @@ export default class ExplorerDataProvider
 		if (items.length > limit) {
 			const documents = items.slice(0, -1); // Remove the extra item
 			const sortedDocuments = this.sortWithPinnedFirst(documents);
-			return [
-				...sortedDocuments,
-				new ShowMoreItemsItem(element.reference, limit),
-			];
+			console.log(
+				`[DEBUG] Creating ShowAllItem for ${element.reference.path}, showing ${documents.length} documents`
+			);
+			const showAllItem = new ShowMoreItemsItem(
+				element.reference,
+				documents.length
+			);
+			console.log(`[DEBUG] ShowAllItem created:`, showAllItem);
+			return [...sortedDocuments, showAllItem];
 		} else {
+			console.log(
+				`[DEBUG] No Show All button needed for ${element.reference.path}, only ${items.length} documents`
+			);
 			return this.sortWithPinnedFirst(items);
 		}
 	}
@@ -623,16 +645,27 @@ export default class ExplorerDataProvider
 	}
 
 	/**
-	 * Increase the paging limit for the given collection path a refresh the view to show more items.
+	 * Show all remaining items for the given collection path by setting a very high limit.
 	 * @param  {string} path
 	 */
 	async showMoreItems(path: string) {
 		const defaultLimit = vscode.workspace
 			.getConfiguration()
 			.get("firestore-explorer.pagingLimit") as number;
-		const newLimit = (this._paging[path] ?? defaultLimit) + defaultLimit;
-		this._paging[path] = newLimit;
+		const currentLimit = this._paging[path] ?? defaultLimit;
+
+		// Set a very high limit to show all documents (99999 should be sufficient for most collections)
+		const showAllLimit = 99999;
+
+		console.log(`[DEBUG] ShowAllItems called for path: ${path}`);
+		console.log(
+			`[DEBUG] Current limit: ${currentLimit}, Setting to show all: ${showAllLimit}`
+		);
+
+		this._paging[path] = showAllLimit;
 		this.refresh();
+
+		console.log(`[DEBUG] Paging state updated to show all:`, this._paging);
 	}
 
 	async orderBy(

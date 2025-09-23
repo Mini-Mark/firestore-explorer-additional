@@ -259,7 +259,32 @@ export class CollectionItem extends Item {
 		this.id = reference.path;
 		this.contextValue = "collection";
 		this.tooltip = this.createTooltip();
-		this.iconPath = new vscode.ThemeIcon("folder");
+
+		// Determine if this is a root collection (no parent path)
+		// Root collections have paths with no forward slashes
+		const isRootCollection = !reference.path.includes("/");
+
+		console.log(
+			`[DEBUG] Collection ${reference.path}, isRoot: ${isRootCollection}`
+		);
+
+		if (isRootCollection) {
+			// Use a colored folder icon for root collections
+			this.iconPath = new vscode.ThemeIcon(
+				"folder",
+				new vscode.ThemeColor("charts.blue")
+			);
+			console.log(
+				`[DEBUG] Applied blue folder icon to root collection: ${reference.path}`
+			);
+		} else {
+			// Use regular folder icon for nested collections
+			this.iconPath = new vscode.ThemeIcon("folder");
+			console.log(
+				`[DEBUG] Applied regular folder icon to nested collection: ${reference.path}`
+			);
+		}
+
 		this.collapsibleState =
 			size === 0
 				? vscode.TreeItemCollapsibleState.None
@@ -328,17 +353,28 @@ export class ShowMoreItemsItem extends Item {
 		const pagingLimit = vscode.workspace
 			.getConfiguration()
 			.get("firestore-explorer.pagingLimit") as number;
-		super(`Load ${pagingLimit} more`, vscode.TreeItemCollapsibleState.None);
+		super(`Show All`, vscode.TreeItemCollapsibleState.None);
 		this.reference = reference;
 		this.id = reference.path + "///showMore";
 		this.offset = offset;
-		this.iconPath = new vscode.ThemeIcon("more");
+		this.iconPath = new vscode.ThemeIcon("unfold");
 		this.contextValue = "show-more";
-		this.command = {
-			command: "firestore-explorer.showMoreItems",
-			title: "More Items",
-			arguments: [reference.path],
-		};
+
+		// Remove the command since we handle clicks via tree view selection events
+		// this.command = {
+		// 	command: "firestore-explorer.showMoreItems",
+		// 	title: "Load More Items",
+		// 	arguments: [reference.path],
+		// };
+
+		// Make sure the tree item is clickable and shows helpful tooltip
+		this.tooltip = `Click to load all remaining documents from ${reference.path}`;
+
+		console.log(
+			`[DEBUG] ShowMoreItemsItem constructor called for path: ${reference.path}`
+		);
+		console.log(`[DEBUG] Context value:`, this.contextValue);
+		console.log(`[DEBUG] Reference path:`, reference.path);
 	}
 
 	// TODO: Show progress animation when loading more items

@@ -181,6 +181,12 @@
 			],
 			"view/item/context": [
 				{
+					"command": "firestore-explorer.showMoreItems",
+					"when": "(view == firestore-explorer-view || view == firestore-pinned-view) && viewItem == show-more",
+					"group": "navigation@0",
+					"title": "Show All Items"
+				},
+				{
 					"command": "firestore-explorer.copyPath",
 					"when": "view == firestore-explorer-view || view == firestore-pinned-view"
 				},
