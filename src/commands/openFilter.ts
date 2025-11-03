@@ -15,70 +15,107 @@ export default async function openFilter(item: CollectionItem) {
 		`[DEBUG] Opening filter for collection: ${item.reference.path}`
 	);
 
-	// Create and show webview panel
-	const panel = vscode.window.createWebviewPanel(
-		"firestoreFilter",
-		`Filter: ${item.collectionId}`,
-		vscode.ViewColumn.One,
-		{
-			enableScripts: true,
-			retainContextWhenHidden: true,
-		}
-	);
+	// Show input box first
+	const searchQuery = await vscode.window.showInputBox({
+		prompt: `Search in collection: ${item.collectionId}`,
+		placeHolder: "Enter search term to filter documents...",
+		ignoreFocusOut: true,
+	});
 
-	// Set the webview content
-	panel.webview.html = getFilterWebviewContent(
-		item.collectionId,
-		item.reference.path
-	);
+	// If user cancels or enters empty string, return
+	if (!searchQuery || searchQuery.trim() === "") {
+		return;
+	}
 
-	// Handle messages from the webview
-	panel.webview.onDidReceiveMessage(async (message) => {
-		switch (message.command) {
-			case "search":
-				const searchQuery = message.query;
-				console.log(`[DEBUG] Filter search query: ${searchQuery}`);
+	console.log(`[DEBUG] Filter search query: ${searchQuery}`);
 
-				try {
-					const results = await performSearch(
-						item.reference,
-						searchQuery
+	// Perform search with the query
+	try {
+		const results = await performSearch(
+			item.reference,
+			searchQuery.trim(),
+			false // Default to not searching keys
+		);
+
+		// Create and show webview panel with results
+		const panel = vscode.window.createWebviewPanel(
+			"firestoreFilter",
+			`Filter: ${item.collectionId}`,
+			vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+			}
+		);
+
+		// Set the webview content with initial results
+		panel.webview.html = getFilterWebviewContent(
+			item.collectionId,
+			item.reference.path,
+			searchQuery.trim(),
+			results
+		);
+
+		// Handle messages from the webview
+		panel.webview.onDidReceiveMessage(async (message) => {
+			switch (message.command) {
+				case "search":
+					const newSearchQuery = message.query;
+					const searchKeys = message.searchKeys || false;
+					console.log(
+						`[DEBUG] Filter search query: ${newSearchQuery}, searchKeys: ${searchKeys}`
 					);
-					panel.webview.postMessage({
-						command: "searchResults",
-						results: results,
-					});
-				} catch (error) {
-					console.error("Filter search error:", error);
-					panel.webview.postMessage({
-						command: "searchError",
-						error:
-							error instanceof Error
-								? error.message
-								: "Unknown error",
-					});
-				}
-				break;
 
-			case "openDocument":
-				const documentPath = message.path;
-				console.log(
-					`[DEBUG] Opening document from filter: ${documentPath}`
-				);
+					try {
+						const newResults = await performSearch(
+							item.reference,
+							newSearchQuery,
+							searchKeys
+						);
+						panel.webview.postMessage({
+							command: "searchResults",
+							results: newResults,
+						});
+					} catch (error) {
+						console.error("Filter search error:", error);
+						panel.webview.postMessage({
+							command: "searchError",
+							error:
+								error instanceof Error
+									? error.message
+									: "Unknown error",
+						});
+					}
+					break;
 
-				// Use the existing openPath command
-				vscode.commands.executeCommand(
-					"firestore-explorer.openPath",
-					documentPath
-				);
-				break;
-		}
-	}, undefined);
+				case "openDocument":
+					const documentPath = message.path;
+					console.log(
+						`[DEBUG] Opening document from filter: ${documentPath}`
+					);
+
+					// Use the existing openPath command
+					vscode.commands.executeCommand(
+						"firestore-explorer.openPath",
+						documentPath
+					);
+					break;
+			}
+		}, undefined);
+	} catch (error) {
+		console.error("Filter search error:", error);
+		vscode.window.showErrorMessage(
+			`Search failed: ${
+				error instanceof Error ? error.message : "Unknown error"
+			}`
+		);
+	}
 }
 
 async function performSearch(
 	collectionRef: admin.firestore.CollectionReference,
-	searchQuery: string
+	searchQuery: string,
+	searchKeys: boolean = false
 ): Promise<any[]> {
 	const firestore = await initializeFirestore();
 
@@ -89,17 +126,16 @@ async function performSearch(
 
 		snapshot.forEach((doc) => {
 			const data = doc.data();
-			const documentContent = JSON.stringify(data).toLowerCase();
 			const query = searchQuery.toLowerCase();
 
-			// Simple text search within document data
-			if (documentContent.includes(query)) {
+			// Check if document matches search criteria
+			if (matchesSearch(data, query, searchKeys)) {
 				results.push({
 					id: doc.id,
 					path: doc.ref.path,
 					data: data,
 					// Create a preview of matching content
-					preview: createPreview(data, searchQuery),
+					preview: createPreview(data, searchQuery, searchKeys),
 				});
 			}
 		});
@@ -112,9 +148,56 @@ async function performSearch(
 	}
 }
 
+function matchesSearch(data: any, query: string, searchKeys: boolean): boolean {
+	if (searchKeys) {
+		// Search both keys and values
+		const documentContent = JSON.stringify(data).toLowerCase();
+		return documentContent.includes(query);
+	} else {
+		// Search only values
+		return searchInValues(data, query);
+	}
+}
+
+function searchInValues(obj: any, query: string): boolean {
+	for (const [key, value] of Object.entries(obj)) {
+		if (typeof value === "string" && value.toLowerCase().includes(query)) {
+			return true;
+		} else if (
+			typeof value === "number" &&
+			value.toString().includes(query)
+		) {
+			return true;
+		} else if (
+			typeof value === "object" &&
+			value !== null &&
+			!Array.isArray(value)
+		) {
+			if (searchInValues(value, query)) {
+				return true;
+			}
+		} else if (Array.isArray(value)) {
+			for (const item of value) {
+				if (
+					typeof item === "string" &&
+					item.toLowerCase().includes(query)
+				) {
+					return true;
+				} else if (typeof item === "object" && item !== null) {
+					if (searchInValues(item, query)) {
+						return true;
+					}
+				}
+			}
+		}
+	}
+	return false;
+}
+
 function createPreview(
 	data: any,
-	searchQuery: string
+	searchQuery: string,
+	searchKeys: boolean = false
 ): { field: string; value: any }[] {
 	const preview: { field: string; value: any }[] = [];
 	const query = searchQuery.toLowerCase();
@@ -122,6 +205,11 @@ function createPreview(
 	function searchInObject(obj: any, path: string = "") {
 		for (const [key, value] of Object.entries(obj)) {
 			const currentPath = path ? `${path}.${key}` : key;
+
+			// Check if key matches (only if searchKeys is enabled)
+			if (searchKeys && key.toLowerCase().includes(query)) {
+				preview.push({ field: currentPath, value: value });
+			}
 
 			if (
 				typeof value === "string" &&
@@ -163,7 +251,9 @@ function createPreview(
 
 function getFilterWebviewContent(
 	collectionId: string,
-	collectionPath: string
+	collectionPath: string,
+	initialQuery: string = "",
+	initialResults: any[] = []
 ): string {
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -199,6 +289,26 @@ function getFilterWebviewContent(
 			border: 1px solid var(--vscode-input-border);
 			border-radius: 3px;
 			font-size: 14px;
+		}
+		
+		.search-options {
+			margin: 10px 0;
+		}
+		
+		.checkbox-container {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		
+		.checkbox-container input[type="checkbox"] {
+			margin: 0;
+		}
+		
+		.checkbox-container label {
+			color: var(--vscode-foreground);
+			font-size: 14px;
+			cursor: pointer;
 		}
 		
 		.search-button {
@@ -279,7 +389,13 @@ function getFilterWebviewContent(
 	</div>
 	
 	<div class="search-container">
-		<input type="text" id="searchInput" class="search-input" placeholder="Enter search term to filter documents..." />
+		<input type="text" id="searchInput" class="search-input" placeholder="Enter search term to filter documents..." value="${initialQuery}" />
+		<div class="search-options">
+			<div class="checkbox-container">
+				<input type="checkbox" id="searchKeysCheckbox" />
+				<label for="searchKeysCheckbox">Include field names in search</label>
+			</div>
+		</div>
 		<button id="searchButton" class="search-button">Search</button>
 	</div>
 	
@@ -289,7 +405,9 @@ function getFilterWebviewContent(
 		const vscode = acquireVsCodeApi();
 		const searchInput = document.getElementById('searchInput');
 		const searchButton = document.getElementById('searchButton');
+		const searchKeysCheckbox = document.getElementById('searchKeysCheckbox');
 		const resultsContainer = document.getElementById('resultsContainer');
+		const initialResults = ${JSON.stringify(initialResults)};
 
 		searchButton.addEventListener('click', performSearch);
 		searchInput.addEventListener('keypress', (e) => {
@@ -307,7 +425,8 @@ function getFilterWebviewContent(
 			showLoading();
 			vscode.postMessage({
 				command: 'search',
-				query: query
+				query: query,
+				searchKeys: searchKeysCheckbox.checked
 			});
 		}
 
@@ -371,6 +490,11 @@ function getFilterWebviewContent(
 					break;
 			}
 		});
+
+		// Show initial results if available
+		if (initialResults && initialResults.length >= 0) {
+			showResults(initialResults);
+		}
 
 		// Focus the search input
 		searchInput.focus();

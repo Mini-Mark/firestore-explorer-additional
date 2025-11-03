@@ -188,6 +188,45 @@ export default class ExplorerDataProvider
 		console.log(
 			`[DEBUG] Loading collection ${element.reference.path} with limit: ${limit}`
 		);
+
+		// First, check if there are any pinned documents in this collection
+		const pinnedDocIds = this.getPinnedDocumentIdsInCollection(
+			element.reference.path
+		);
+		const pinnedDocuments: DocumentItem[] = [];
+
+		// Load pinned documents first if they exist
+		if (pinnedDocIds.length > 0) {
+			console.log(
+				`[DEBUG] Loading ${pinnedDocIds.length} pinned documents first`
+			);
+			for (const docId of pinnedDocIds) {
+				try {
+					const docRef = element.reference.doc(docId);
+					const docSnapshot = await docRef.get();
+					if (docSnapshot.exists) {
+						const sampleData = this.getSampleData(
+							docSnapshot.data()
+						);
+						pinnedDocuments.push(
+							new DocumentItem(
+								docSnapshot.id,
+								docSnapshot.ref,
+								undefined,
+								sampleData
+							)
+						);
+					}
+				} catch (error) {
+					console.error(
+						`[DEBUG] Error loading pinned document ${docId}:`,
+						error
+					);
+				}
+			}
+		}
+
+		// Then load the regular documents
 		console.log(
 			this._orderBy[element.reference.path]?.field ??
 				admin.firestore.FieldPath.documentId()
@@ -204,34 +243,41 @@ export default class ExplorerDataProvider
 		const items: DocumentItem[] = [];
 
 		snapshots.forEach((snapshot) => {
-			const sampleData = this.getSampleData(snapshot.data());
-			items.push(
-				new DocumentItem(
-					snapshot.id,
-					snapshot.ref,
-					undefined,
-					sampleData
-				)
-			);
+			// Skip if this document is already in pinnedDocuments
+			if (!pinnedDocIds.includes(snapshot.id)) {
+				const sampleData = this.getSampleData(snapshot.data());
+				items.push(
+					new DocumentItem(
+						snapshot.id,
+						snapshot.ref,
+						undefined,
+						sampleData
+					)
+				);
+			}
 		});
 
+		// Combine pinned documents (at the top) with regular documents
+		const allDocuments = [...pinnedDocuments, ...items];
+
 		if (items.length > limit) {
-			const documents = items.slice(0, -1); // Remove the extra item
-			const sortedDocuments = this.sortWithPinnedFirst(documents);
+			// Remove the extra item from regular documents
+			const regularDocuments = items.slice(0, -1);
+			const combinedDocuments = [...pinnedDocuments, ...regularDocuments];
 			console.log(
-				`[DEBUG] Creating ShowAllItem for ${element.reference.path}, showing ${documents.length} documents`
+				`[DEBUG] Creating ShowAllItem for ${element.reference.path}, showing ${combinedDocuments.length} documents (${pinnedDocuments.length} pinned)`
 			);
 			const showAllItem = new ShowMoreItemsItem(
 				element.reference,
-				documents.length
+				combinedDocuments.length
 			);
 			console.log(`[DEBUG] ShowAllItem created:`, showAllItem);
-			return [...sortedDocuments, showAllItem];
+			return [...combinedDocuments, showAllItem];
 		} else {
 			console.log(
-				`[DEBUG] No Show All button needed for ${element.reference.path}, only ${items.length} documents`
+				`[DEBUG] No Show All button needed for ${element.reference.path}, showing ${allDocuments.length} documents (${pinnedDocuments.length} pinned)`
 			);
-			return this.sortWithPinnedFirst(items);
+			return allDocuments;
 		}
 	}
 
@@ -777,5 +823,26 @@ export default class ExplorerDataProvider
 	 */
 	getPinnedItemsPaths(): Set<string> {
 		return this._pinnedItems;
+	}
+
+	/**
+	 * Get pinned document IDs within a specific collection
+	 */
+	private getPinnedDocumentIdsInCollection(collectionPath: string): string[] {
+		const pinnedDocIds: string[] = [];
+		const collectionPrefix = collectionPath + "/";
+
+		for (const pinnedPath of this._pinnedItems) {
+			// Check if this pinned path is a direct child document of this collection
+			if (pinnedPath.startsWith(collectionPrefix)) {
+				const remainder = pinnedPath.substring(collectionPrefix.length);
+				// Make sure it's a direct child (no more slashes)
+				if (!remainder.includes("/")) {
+					pinnedDocIds.push(remainder);
+				}
+			}
+		}
+
+		return pinnedDocIds;
 	}
 }

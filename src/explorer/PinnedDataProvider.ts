@@ -6,8 +6,6 @@ import {
 	CollectionItem,
 	DocumentItem,
 	Item,
-	ShowMoreItemsItem,
-	PinnedShowMoreItemsItem,
 	KeyItem,
 	NestedKeyItem,
 } from "./items";
@@ -20,7 +18,6 @@ export default class PinnedDataProvider
 	implements vscode.TreeDataProvider<Item>
 {
 	private _onDidChangeTreeData = new vscode.EventEmitter<Item | undefined>();
-	private _paging: { [key: string]: number } = {};
 	private _mainProvider: ExplorerDataProvider;
 	private _collectionScanCache: {
 		[collectionPath: string]: { hassPinned: boolean; lastChecked: number };
@@ -209,54 +206,60 @@ export default class PinnedDataProvider
 			return children || [];
 		} else {
 			// In structure mode, get documents
-			const limit =
-				this._paging[element.reference.path] ??
-				vscode.workspace
-					.getConfiguration()
-					.get("firestore-explorer.pagingLimit", 10);
-
-			const snapshots = await element.reference
-				.limit(limit + 1)
-				.orderBy(admin.firestore.FieldPath.documentId(), "asc")
-				.get();
-
-			const allDocuments: DocumentItem[] = [];
+			// Always load all pinned documents in this collection
+			const pinnedDocIds = this.getPinnedDocumentIdsInCollection(
+				element.reference.path
+			);
 			const pinnedDocuments: DocumentItem[] = [];
 
-			snapshots.forEach((snapshot) => {
-				const documentItem = new DocumentItem(
-					snapshot.id,
-					snapshot.ref,
-					undefined,
-					this.getSampleData(snapshot.data())
-				);
-
-				allDocuments.push(documentItem);
-
-				// Check if this document is pinned OR has pinned subcollections
-				const isDirectlyPinned =
-					this._mainProvider.isItemPinned(documentItem);
-				const hassPinnedSubcollections =
-					this.documentHasPinnedSubcollections(documentItem);
-
-				if (isDirectlyPinned || hassPinnedSubcollections) {
-					pinnedDocuments.push(documentItem);
+			if (pinnedDocIds.length > 0) {
+				for (const docId of pinnedDocIds) {
+					try {
+						const docRef = element.reference.doc(docId);
+						const docSnapshot = await docRef.get();
+						if (docSnapshot.exists) {
+							pinnedDocuments.push(
+								new DocumentItem(
+									docSnapshot.id,
+									docSnapshot.ref,
+									undefined,
+									this.getSampleData(docSnapshot.data())
+								)
+							);
+						}
+					} catch (error) {
+						console.error(
+							`Error loading pinned document ${docId}:`,
+							error
+						);
+					}
 				}
-			});
+			}
 
 			// If collection has pinned documents, show only pinned documents
-			// If collection has no pinned documents, show all documents
-			const itemsToShow =
-				pinnedDocuments.length > 0 ? pinnedDocuments : allDocuments;
-
-			if (itemsToShow.length > limit) {
-				const documents = itemsToShow.slice(0, limit);
-				return [
-					...documents,
-					new PinnedShowMoreItemsItem(element.reference, limit),
-				];
+			// If collection has no pinned documents, show all documents (no pagination in pinned view)
+			if (pinnedDocuments.length > 0) {
+				return pinnedDocuments;
 			} else {
-				return itemsToShow;
+				// Load all documents without pagination
+				const snapshots = await element.reference
+					.orderBy(admin.firestore.FieldPath.documentId(), "asc")
+					.get();
+
+				const allDocuments: DocumentItem[] = [];
+
+				snapshots.forEach((snapshot) => {
+					allDocuments.push(
+						new DocumentItem(
+							snapshot.id,
+							snapshot.ref,
+							undefined,
+							this.getSampleData(snapshot.data())
+						)
+					);
+				});
+
+				return allDocuments;
 			}
 		}
 	}
@@ -288,18 +291,6 @@ export default class PinnedDataProvider
 		});
 
 		return sample;
-	}
-
-	/**
-	 * Show more items for a collection in the pinned panel
-	 */
-	async showMoreItems(path: string): Promise<void> {
-		const defaultLimit = vscode.workspace
-			.getConfiguration()
-			.get("firestore-explorer.pagingLimit") as number;
-		const newLimit = (this._paging[path] ?? defaultLimit) + defaultLimit;
-		this._paging[path] = newLimit;
-		this.refresh();
 	}
 
 	/**
@@ -359,5 +350,26 @@ export default class PinnedDataProvider
 		}
 
 		return false;
+	}
+
+	/**
+	 * Get pinned document IDs within a specific collection
+	 */
+	private getPinnedDocumentIdsInCollection(collectionPath: string): string[] {
+		const pinnedDocIds: string[] = [];
+		const collectionPrefix = collectionPath + "/";
+
+		for (const pinnedPath of this._mainProvider.getPinnedItemsPaths()) {
+			// Check if this pinned path is a direct child document of this collection
+			if (pinnedPath.startsWith(collectionPrefix)) {
+				const remainder = pinnedPath.substring(collectionPrefix.length);
+				// Make sure it's a direct child (no more slashes)
+				if (!remainder.includes("/")) {
+					pinnedDocIds.push(remainder);
+				}
+			}
+		}
+
+		return pinnedDocIds;
 	}
 }

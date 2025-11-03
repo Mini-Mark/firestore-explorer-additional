@@ -272,14 +272,17 @@ export class CollectionItem extends Item {
 			// Use a colored folder icon for root collections
 			this.iconPath = new vscode.ThemeIcon(
 				"folder",
-				new vscode.ThemeColor("charts.blue")
+				new vscode.ThemeColor("charts.purple")
 			);
 			console.log(
-				`[DEBUG] Applied blue folder icon to root collection: ${reference.path}`
+				`[DEBUG] Applied purple folder icon to root collection: ${reference.path}`
 			);
 		} else {
 			// Use regular folder icon for nested collections
-			this.iconPath = new vscode.ThemeIcon("folder");
+			this.iconPath = new vscode.ThemeIcon(
+				"folder",
+				new vscode.ThemeColor("charts.blue")
+			);
 			console.log(
 				`[DEBUG] Applied regular folder icon to nested collection: ${reference.path}`
 			);
@@ -357,7 +360,10 @@ export class ShowMoreItemsItem extends Item {
 		this.reference = reference;
 		this.id = reference.path + "///showMore";
 		this.offset = offset;
-		this.iconPath = new vscode.ThemeIcon("unfold");
+		this.iconPath = new vscode.ThemeIcon(
+			"more",
+			new vscode.ThemeColor("activityBar.foreground")
+		);
 		this.contextValue = "show-more";
 
 		// Remove the command since we handle clicks via tree view selection events

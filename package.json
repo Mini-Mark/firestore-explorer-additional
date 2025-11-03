@@ -21,7 +21,6 @@
 		"onCommand:firestore-explorer.setServiceAccountKeyPath",
 		"onCommand:firestore-explorer.refreshExplorer",
 		"onCommand:firestore-explorer.showMoreItems",
-		"onCommand:firestore-pinned.showMoreItems",
 		"onCommand:firestore-explorer.toggleViewMode",
 		"onCommand:firestore-explorer.pinItem",
 		"onCommand:firestore-explorer.unpinItem",
@@ -148,11 +147,6 @@
 				"enablement": "false"
 			},
 			{
-				"command": "firestore-pinned.showMoreItems",
-				"title": "Show More Items",
-				"enablement": "false"
-			},
-			{
 				"command": "firestore-explorer.pinItem",
 				"title": "Pin to Top",
 				"icon": "$(pin)"
@@ -239,10 +233,6 @@
 				},
 				{
 					"command": "firestore-explorer.showMoreItems",
-					"when": "false"
-				},
-				{
-					"command": "firestore-pinned.showMoreItems",
 					"when": "false"
 				},
 				{

@@ -86,7 +86,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand("firestore-explorer.openPath", openPath)
+		vscode.commands.registerCommand(
+			"firestore-explorer.openPath",
+			(path?: string) =>
+				openPath(path, explorerView, explorerDataProvider)
+		)
 	);
 
 	context.subscriptions.push(
@@ -174,13 +178,6 @@ export async function activate(context: vscode.ExtensionContext) {
 					);
 				}
 			}
-		)
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand(
-			"firestore-pinned.showMoreItems",
-			(path: string) => pinnedDataProvider.showMoreItems(path)
 		)
 	);
 
